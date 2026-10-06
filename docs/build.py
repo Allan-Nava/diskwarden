@@ -106,7 +106,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
   -webkit-font-smoothing:antialiased}
 .wrap{max-width:900px;margin:0 auto;padding:0 20px}
 header{border-bottom:1px solid var(--line);padding:56px 0 36px}
-h1{font-size:2.2rem;margin:0 0 .25em;letter-spacing:-.02em}
+h1{font-size:2.2rem;margin:.3em 0 .25em;letter-spacing:-.02em}
 h2{font-size:1.3rem;margin:2.4em 0 .4em;letter-spacing:-.01em}
 h3{font-size:1rem;margin:1.8em 0 .3em}
 p,li{max-width:66ch}
@@ -188,12 +188,14 @@ instead of deleting them.">
 </head><body>
 
 <header><div class="wrap">
+<img src="logo.svg" width="64" height="64" alt="">
 <h1>diskwarden</h1>
 <p class="sub">Reclaim disk space on a Linux server when a filesystem crosses
 a threshold — and not a moment before.</p>
 <div class="bar">
 <a class="btn primary" href="{REPO}">Repository</a>
 <a class="btn" href="{REPO}#install">Install</a>
+<a class="btn" href="{REPO}/blob/main/ROADMAP.md">Roadmap</a>
 <a class="btn" href="{REPO}/blob/main/LICENSE">MIT</a>
 </div>
 <p style="margin-top:18px">{badge_html} <span class="pill">v{e(ver)}</span></p>
@@ -315,6 +317,10 @@ running the suites. · <a href="{REPO}">source</a> · MIT
 """
 
     os.makedirs(outdir, exist_ok=True)
+    src_logo = os.path.join(ROOT, "assets", "logo.svg")
+    if os.path.exists(src_logo):
+        import shutil
+        shutil.copy2(src_logo, os.path.join(outdir, "logo.svg"))
     with open(os.path.join(outdir, "index.html"), "w", encoding="utf-8") as fh:
         fh.write(page)
     open(os.path.join(outdir, ".nojekyll"), "w").close()

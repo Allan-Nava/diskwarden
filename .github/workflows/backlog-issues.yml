@@ -1,0 +1,45 @@
+name: Backlog issues
+
+# Keep the GitHub issues in step with BACKLOG.md.
+#
+# BACKLOG.md is the single source of truth, the same way it is for ROADMAP.md:
+# an item's stable DW-n id is what commits and the release notes reference, and
+# the issue is a view of it. The sync runs one way only — backlog to issues,
+# never the reverse. Closing an issue on GitHub does not change the plan;
+# ticking the item in BACKLOG.md does.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - BACKLOG.md
+      - .github/workflows/backlog-issues.yml
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the plan without changing anything"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # Two runs racing would both see "no issue for DW-n" and open it twice.
+  group: backlog-issues
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - run: >
+          npx --yes @allan_nava/backlogsync sync
+          ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

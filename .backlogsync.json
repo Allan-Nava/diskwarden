@@ -1,0 +1,13 @@
+{
+  "prefix": "DW",
+  "meta": "dw",
+  "name": "diskwarden",
+  "regenerate": "node ../backlogsync/bin/backlogsync.mjs roadmap",
+  "labels": {
+    "script": ["0e8a16", "The diskwarden script itself"],
+    "role": ["3b4bb8", "The Ansible role"],
+    "safety": ["b60205", "Things that decide whether it deletes the wrong file"],
+    "packaging": ["5319e7", "deb, rpm, Homebrew, releases"],
+    "docs": ["0075ca", "README and the project page"]
+  }
+}

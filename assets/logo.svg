@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="diskwarden">
+  <title>diskwarden</title>
+  <!-- Usage climbing, and the line it is not supposed to cross. Two bars sit under
+       the threshold and are left alone; the third has gone well through it, which is
+       the only moment the tool does anything. The mark is dashed and thinner than the
+       bars because it is a rule, not a reading. -->
+  <g fill="none" stroke="#2f6f4f" stroke-linecap="round">
+    <g stroke-width="8">
+      <path d="M17 52 V44" />
+      <path d="M32 52 V36" />
+      <path d="M47 52 V12" />
+    </g>
+    <path d="M7 28 H57" stroke-width="3.5" stroke-dasharray="7 5" opacity="0.8" />
+  </g>
+</svg>

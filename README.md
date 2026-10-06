@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Allan-Nava/diskwarden/main/assets/logo.svg" width="72" height="72" alt="diskwarden">
+</p>
+
 # diskwarden
 
 Reclaim disk space on a Linux server when a filesystem crosses a threshold —
@@ -53,7 +57,8 @@ Both numbers are configurable. The gap between them matters: routine work is
 safe enough to run hourly and unattended, truncating a file somebody is
 writing to is not, and the two should not share a trigger.
 
-**Docs:** <https://allan-nava.github.io/diskwarden/> — generated from the
+**Docs:** <https://allan-nava.github.io/diskwarden/> · **Plan:**
+[BACKLOG.md](BACKLOG.md) → [ROADMAP.md](ROADMAP.md) — generated from the
 script and the role defaults, so it cannot document a default that does not
 exist.
 
@@ -157,6 +162,23 @@ than the code being fine.
 that the role's variable names and the script's config keys still agree.
 Rename one side and nothing errors — the config is written, the script sources
 it, and the default quietly applies instead of your value.
+
+## What it does not do yet
+
+Three limitations of 0.1.0, written down rather than discovered:
+
+- **The dry run cannot put a number on every module.** `journalctl --vacuum`,
+  `apt-get clean` and `docker prune` report *"would run"* with no byte figure,
+  because the only way to know is to run them. The file-based modules do give
+  real numbers. (`DW-9`)
+- **The containers module has no tests.** The suite has no Docker daemon, so
+  the module whose mistakes would be the most expensive is exercised by
+  nobody. (`DW-10`)
+- **`df` lies on copy-on-write filesystems.** On btrfs and ZFS, free space and
+  reclaimable space are different questions and snapshots hold deleted data,
+  so the thresholds would fire late or never. (`DW-11`)
+
+All three are in [BACKLOG.md](BACKLOG.md) for v0.2.0.
 
 ## Modules
 

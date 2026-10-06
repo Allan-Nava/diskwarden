@@ -43,6 +43,18 @@ jobs:
       - name: role tests
         run: bash test/run-ansible-tests.sh
 
+  backlog:
+    name: backlog and roadmap in step
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      # BACKLOG.md is the source; ROADMAP.md is generated from it. This fails
+      # when they have drifted, which is the only way a generated file stays
+      # generated.
+      - run: npx --yes @allan_nava/backlogsync check
+
   page:
     name: the page matches the code
     runs-on: ubuntu-latest
