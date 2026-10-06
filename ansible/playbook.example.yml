@@ -5,7 +5,7 @@
 #   ansible-playbook -i inventory ansible/playbook.example.yml
 #   ssh host 'sudo diskwarden'              # dry run, on the real filesystem
 #   ansible-playbook ... -e diskwarden_enabled=true
-- name: diskwarden
+- name: Install diskwarden
   hosts: all
   become: true
   roles:

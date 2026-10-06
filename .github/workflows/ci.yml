@@ -34,8 +34,12 @@ jobs:
         run: ansible-playbook --syntax-check ansible/playbook.example.yml
         env:
           ANSIBLE_ROLES_PATH: ansible/roles
+      # A gate, not advice. The profile is pinned in .ansible-lint so a new
+      # ansible-lint release cannot make this pass by lowering the bar.
       - name: lint
-        run: ansible-lint ansible/ || true    # advisory, not a gate
+        run: ansible-lint ansible/
+        env:
+          ANSIBLE_ROLES_PATH: ansible/roles
       - name: role tests
         run: bash test/run-ansible-tests.sh
 

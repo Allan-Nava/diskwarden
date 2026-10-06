@@ -20,6 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "diskwarden")
 ROLE_DEFAULTS = os.path.join(ROOT, "ansible", "roles", "diskwarden",
                              "defaults", "main.yml")
+LINT_CONFIG = os.path.join(ROOT, ".ansible-lint")
 REPO = "https://github.com/Allan-Nava/diskwarden"
 
 
@@ -65,6 +66,18 @@ def role_vars():
         if m:
             out.append((m.group(1), m.group(2), m.group(3) or ""))
     return out
+
+
+def lint_profile():
+    """The enforced ansible-lint profile, read rather than claimed."""
+    try:
+        for line in open(LINT_CONFIG, encoding="utf-8"):
+            m = re.match(r'^profile:\s*(\w+)', line)
+            if m:
+                return m.group(1)
+    except OSError:
+        pass
+    return None
 
 
 def run_suite(path):
@@ -134,6 +147,7 @@ def build(outdir):
     ver = script_version()
     rvars = role_vars()
 
+    profile = lint_profile()
     sp, sf, sran = run_suite(os.path.join(ROOT, "test", "run-tests.sh"))
     ap, af, aran = run_suite(os.path.join(ROOT, "test", "run-ansible-tests.sh"))
 
@@ -157,6 +171,8 @@ def build(outdir):
         badges.append(f'<span class="pill">{sp} behaviour tests passing</span>')
     if aran:
         badges.append(f'<span class="pill">{ap} role tests passing</span>')
+    if profile:
+        badges.append(f'<span class="pill">ansible-lint: {e(profile)}</span>')
     badge_html = " ".join(badges)
 
     page = f"""<!DOCTYPE html>
@@ -281,7 +297,12 @@ variable names and the script's config keys still agree. Rename one side and
 nothing errors — the config is written, the script sources it, and the
 default quietly applies instead of your value.</p>
 <pre>bash test/run-tests.sh          # {sp if sran else '?'} passing
-bash test/run-ansible-tests.sh  # {ap if aran else '?'} passing</pre>
+bash test/run-ansible-tests.sh  # {ap if aran else '?'} passing
+ansible-lint ansible/           # profile: {e(profile) if profile else '?'}</pre>
+<p>ansible-lint is a gate rather than advice, and the profile is pinned in
+<code>.ansible-lint</code>. Without pinning it, the strictness would be
+whatever the installed version defaults to — a green run would then mean
+&ldquo;the bar moved&rdquo;, not &ldquo;the code is fine&rdquo;.</p>
 
 </div>
 <footer><div class="wrap">

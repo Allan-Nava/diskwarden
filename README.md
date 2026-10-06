@@ -104,6 +104,7 @@ fills the disk it is watching.
 ```bash
 bash test/run-tests.sh          # the script
 bash test/run-ansible-tests.sh  # the role
+ansible-lint ansible/           # profile: production, a gate not advice
 ```
 
 The tests do not prove it deletes files. That is easy, and most people manage
@@ -146,6 +147,11 @@ ansible-playbook -i inventory ansible/playbook.example.yml
 ssh host 'sudo diskwarden'                       # read the plan first
 ansible-playbook ... -e diskwarden_enabled=true  # then arm it
 ```
+
+`ansible-lint` runs as a **gate**, at the `production` profile, pinned in
+`.ansible-lint`. Pinning matters: without it the strictness is whatever the
+installed version defaults to, so a green run could mean the bar moved rather
+than the code being fine.
 
 `bash test/run-ansible-tests.sh` checks the thing that silently breaks:
 that the role's variable names and the script's config keys still agree.

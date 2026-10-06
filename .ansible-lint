@@ -1,0 +1,9 @@
+# Pinned so the gate cannot quietly relax. Without an explicit profile the
+# strictness is whatever the installed ansible-lint defaults to, which changes
+# between versions — a green CI would then mean "the bar moved", not "the code
+# is fine". The role reaches `production`, so that is what is enforced.
+profile: production
+
+exclude_paths:
+  - .github/
+  - site/

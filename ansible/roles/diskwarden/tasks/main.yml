@@ -47,7 +47,7 @@
     - diskwarden.service
     - diskwarden.timer
   when: diskwarden_scheduler == "systemd"
-  notify: reload systemd
+  notify: Reload systemd
   tags: [diskwarden, diskwarden-schedule]
 
 - name: Create the systemd drop-in directories
@@ -75,7 +75,7 @@
       ExecStart=
       ExecStart={{ diskwarden_script_path }} --apply --quiet --config {{ diskwarden_config_path }}
   when: diskwarden_scheduler == "systemd"
-  notify: reload systemd
+  notify: Reload systemd
   tags: [diskwarden, diskwarden-schedule]
 
 - name: Set the timer interval
@@ -90,7 +90,7 @@
       OnUnitActiveSec={{ diskwarden_interval }}
       RandomizedDelaySec={{ diskwarden_randomized_delay }}
   when: diskwarden_scheduler == "systemd"
-  notify: reload systemd
+  notify: Reload systemd
   tags: [diskwarden, diskwarden-schedule]
 
 - name: Enable the timer
