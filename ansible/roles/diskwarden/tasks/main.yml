@@ -1,0 +1,126 @@
+---
+# The script is COPIED, not templated. In the role this was extracted from it
+# was a .j2, which entangled the shell logic with Ansible variables and meant
+# you could not run or test the script without Ansible. One source of truth:
+# the file in the repository is the file on the host, byte for byte.
+- name: Install the diskwarden script
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../diskwarden"
+    dest: "{{ diskwarden_script_path }}"
+    owner: "{{ diskwarden_owner }}"
+    group: "{{ diskwarden_group }}"
+    mode: "0755"
+  tags: [diskwarden, diskwarden-script]
+
+- name: Write the configuration
+  ansible.builtin.template:
+    src: diskwarden.conf.j2
+    dest: "{{ diskwarden_config_path }}"
+    owner: "{{ diskwarden_owner }}"
+    group: "{{ diskwarden_group }}"
+    mode: "0644"
+  tags: [diskwarden, diskwarden-config]
+
+- name: Create the log file
+  ansible.builtin.file:
+    path: "{{ diskwarden_log_path }}"
+    state: touch
+    owner: "{{ diskwarden_owner }}"
+    group: "{{ diskwarden_group }}"
+    mode: "0640"
+    modification_time: preserve
+    access_time: preserve
+  tags: [diskwarden, diskwarden-config]
+
+# --- scheduling -------------------------------------------------------------
+# Nothing below runs diskwarden with --apply unless diskwarden_enabled is
+# true. Installing the tool and arming it are two decisions, not one.
+
+- name: Install the systemd units
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../systemd/{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: "{{ diskwarden_owner }}"
+    group: "{{ diskwarden_group }}"
+    mode: "0644"
+  loop:
+    - diskwarden.service
+    - diskwarden.timer
+  when: diskwarden_scheduler == "systemd"
+  notify: reload systemd
+  tags: [diskwarden, diskwarden-schedule]
+
+- name: Create the systemd drop-in directories
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}.d"
+    state: directory
+    owner: "{{ diskwarden_owner }}"
+    group: "{{ diskwarden_group }}"
+    mode: "0755"
+  loop:
+    - diskwarden.service
+    - diskwarden.timer
+  when: diskwarden_scheduler == "systemd"
+  tags: [diskwarden, diskwarden-schedule]
+
+- name: Point the unit at the installed script and interval
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/diskwarden.service.d/10-role.conf
+    owner: "{{ diskwarden_owner }}"
+    group: "{{ diskwarden_group }}"
+    mode: "0644"
+    content: |
+      # {{ ansible_managed }}
+      [Service]
+      ExecStart=
+      ExecStart={{ diskwarden_script_path }} --apply --quiet --config {{ diskwarden_config_path }}
+  when: diskwarden_scheduler == "systemd"
+  notify: reload systemd
+  tags: [diskwarden, diskwarden-schedule]
+
+- name: Set the timer interval
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/diskwarden.timer.d/10-role.conf
+    owner: "{{ diskwarden_owner }}"
+    group: "{{ diskwarden_group }}"
+    mode: "0644"
+    content: |
+      # {{ ansible_managed }}
+      [Timer]
+      OnUnitActiveSec={{ diskwarden_interval }}
+      RandomizedDelaySec={{ diskwarden_randomized_delay }}
+  when: diskwarden_scheduler == "systemd"
+  notify: reload systemd
+  tags: [diskwarden, diskwarden-schedule]
+
+- name: Enable the timer
+  ansible.builtin.systemd:
+    name: diskwarden.timer
+    enabled: "{{ diskwarden_enabled }}"
+    state: "{{ 'started' if diskwarden_enabled else 'stopped' }}"
+    daemon_reload: true
+  when: diskwarden_scheduler == "systemd"
+  tags: [diskwarden, diskwarden-schedule]
+
+- name: Install the cron entry
+  ansible.builtin.copy:
+    dest: "{{ diskwarden_cron_path }}"
+    owner: "{{ diskwarden_owner }}"
+    group: "{{ diskwarden_group }}"
+    mode: "0644"
+    content: |
+      # {{ ansible_managed }}
+      SHELL=/bin/bash
+      PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      {{ diskwarden_cron_schedule }} root {{ diskwarden_script_path }} --apply --quiet --config {{ diskwarden_config_path }}
+  when:
+    - diskwarden_scheduler == "cron"
+    - diskwarden_enabled | bool
+  tags: [diskwarden, diskwarden-schedule]
+
+- name: Remove the cron entry when disabled
+  ansible.builtin.file:
+    path: "{{ diskwarden_cron_path }}"
+    state: absent
+  when: diskwarden_scheduler != "cron" or not (diskwarden_enabled | bool)
+  tags: [diskwarden, diskwarden-schedule]

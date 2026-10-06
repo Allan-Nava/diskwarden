@@ -1,0 +1,19 @@
+---
+# Install diskwarden, configured but NOT armed. Run it by hand on one host,
+# read the plan, then set diskwarden_enabled: true.
+#
+#   ansible-playbook -i inventory ansible/playbook.example.yml
+#   ssh host 'sudo diskwarden'              # dry run, on the real filesystem
+#   ansible-playbook ... -e diskwarden_enabled=true
+- name: diskwarden
+  hosts: all
+  become: true
+  roles:
+    - role: diskwarden
+      vars:
+        diskwarden_routine_threshold: 70
+        diskwarden_emergency_threshold: 80
+        # A build server that writes its own rotated logs somewhere else:
+        # diskwarden_extra_log_dirs:
+        #   - /opt/myapp/logs
+        diskwarden_enabled: false

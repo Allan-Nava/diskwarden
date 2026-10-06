@@ -1,0 +1,46 @@
+---
+# Ownership. Variables rather than a hardcoded root so the role can be
+# exercised without privileges, which is how its tests run.
+diskwarden_owner: root
+diskwarden_group: root
+
+# Where things go
+diskwarden_script_path: /usr/local/sbin/diskwarden
+diskwarden_config_path: /etc/diskwarden.conf
+diskwarden_log_path: /var/log/diskwarden.log
+
+# Schedule. systemd by default; set to cron if the host has no systemd.
+diskwarden_scheduler: systemd        # systemd | cron | none
+diskwarden_interval: 1h              # systemd OnUnitActiveSec
+diskwarden_randomized_delay: 5min    # so a fleet does not act in lockstep
+diskwarden_cron_schedule: "0 * * * *"
+diskwarden_cron_path: /etc/cron.d/diskwarden
+
+# ---------------------------------------------------------------------------
+# Everything below is written into diskwarden.conf. The names match the script
+# exactly: there is no second vocabulary to learn, and no mapping layer to get
+# wrong.
+# ---------------------------------------------------------------------------
+diskwarden_mountpoint: "/"
+diskwarden_routine_threshold: 70
+diskwarden_emergency_threshold: 80
+
+diskwarden_archived_log_days: 5
+diskwarden_rotated_log_days: 7
+diskwarden_journal_keep_days: 5
+diskwarden_tmp_days: 10
+diskwarden_crashdump_days: 7
+diskwarden_container_image_days: 5
+
+diskwarden_active_log_truncate_mb: 300
+diskwarden_container_json_truncate_mb: 100
+
+# Opt-in: application log directories outside /var/log. Only rotated copies
+# are removed; an active .log is never touched.
+diskwarden_extra_log_dirs: []
+
+diskwarden_modules: "logs journal packages tmp crashdumps containers"
+
+# ⚠ The timer is what makes diskwarden delete anything. Leaving this false
+# installs everything and schedules nothing, so you can run it by hand first.
+diskwarden_enabled: false

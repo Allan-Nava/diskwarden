@@ -53,6 +53,10 @@ Both numbers are configurable. The gap between them matters: routine work is
 safe enough to run hourly and unattended, truncating a file somebody is
 writing to is not, and the two should not share a trigger.
 
+**Docs:** <https://allan-nava.github.io/diskwarden/> — generated from the
+script and the role defaults, so it cannot document a default that does not
+exist.
+
 ## Install
 
 ```bash
@@ -98,7 +102,8 @@ fills the disk it is watching.
 ## Testing
 
 ```bash
-bash test/run-tests.sh
+bash test/run-tests.sh          # the script
+bash test/run-ansible-tests.sh  # the role
 ```
 
 The tests do not prove it deletes files. That is easy, and most people manage
@@ -120,6 +125,32 @@ diskwarden --root /tmp/fake-server --usage 95 --modules "logs tmp"
 
 `--root` prefixes every path and `--usage` overrides the measurement, so you
 can reproduce a full disk without having one.
+
+## Ansible
+
+```yaml
+- role: diskwarden
+  vars:
+    diskwarden_routine_threshold: 70
+    diskwarden_extra_log_dirs: [/opt/myapp/logs]
+    diskwarden_enabled: false      # install now, arm after a dry run
+```
+
+The role **copies** the script rather than templating it, so the file in the
+repository is the file on the host, byte for byte, and the script stays
+runnable and testable without Ansible. It ships **disarmed**: installing
+diskwarden and arming it are two decisions.
+
+```bash
+ansible-playbook -i inventory ansible/playbook.example.yml
+ssh host 'sudo diskwarden'                       # read the plan first
+ansible-playbook ... -e diskwarden_enabled=true  # then arm it
+```
+
+`bash test/run-ansible-tests.sh` checks the thing that silently breaks:
+that the role's variable names and the script's config keys still agree.
+Rename one side and nothing errors — the config is written, the script sources
+it, and the default quietly applies instead of your value.
 
 ## Modules
 
