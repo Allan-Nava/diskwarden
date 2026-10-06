@@ -52,8 +52,11 @@ jobs:
         with: {node-version: "22"}
       # BACKLOG.md is the source; ROADMAP.md is generated from it. This fails
       # when they have drifted, which is the only way a generated file stays
-      # generated.
-      - run: npx --yes @allan_nava/backlogsync check
+      # generated. Pinned to a tag rather than npx: the version is then part of
+      # the diff instead of whatever the registry served that morning.
+      - uses: Allan-Nava/backlogsync@backlogsync--v0.1.1
+        with:
+          command: check
 
   page:
     name: the page matches the code
