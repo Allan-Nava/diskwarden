@@ -48,11 +48,18 @@ written down because a limitation nobody recorded becomes a surprise.
   the only way to know is to run them. The file-based modules do give real numbers.
   Either find a per-tool estimate or say so in the output, which is honest but less
   useful. <!-- dw: prio=high size=M labels=safety -->
-- [ ] **DW-10 — The containers module is untested**: the suite has no Docker, so
-  `reclaim_containers` is exercised by nobody. It is also the module whose mistakes
-  are the most expensive — `docker volume prune` would take a data volume. Needs a
-  CI job with a real daemon and a throwaway volume.
-  <!-- dw: prio=high size=M labels=safety -->
+- [x] **DW-10 — The containers module is tested**: 17 cases against a fake
+  container CLI that records invocations instead of performing them. They assert
+  what is never issued — no `docker volume prune` in any mode — and that only
+  `runner-*-cache-*` volumes are removed, with a data volume and a build volume
+  in the fixture to prove it. The suite strips every real docker and podman from
+  PATH and refuses to run if one is still reachable.
+  <!-- dw: prio=high size=M labels=safety ver=main -->
+- [ ] **DW-18 — Containers tested against a real daemon**: the fake CLI proves the
+  decision logic, not that the commands are valid. A job with a real daemon, a
+  throwaway data volume and a fake runner cache volume would prove both, and would
+  catch a flag that a future Docker release stops accepting.
+  <!-- dw: prio=med size=M labels=safety -->
 - [ ] **DW-11 — `df` lies on copy-on-write filesystems**: on btrfs and ZFS, free
   space and reclaimable space are different questions, and snapshots hold deleted
   data. The thresholds would fire late or never. Detect the filesystem and either

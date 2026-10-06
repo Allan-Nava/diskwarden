@@ -21,6 +21,12 @@ jobs:
           shellcheck -S warning diskwarden test/*.sh
       - name: behaviour tests
         run: bash test/run-tests.sh
+      # The containers module, against a fake CLI. It asserts what is never
+      # issued — `docker volume prune` would take a data volume — and the
+      # suite sandboxes PATH so it cannot reach a real daemon even on a runner
+      # that has one.
+      - name: containers module
+        run: bash test/run-container-tests.sh
 
   role:
     name: ansible role

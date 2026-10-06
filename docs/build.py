@@ -149,6 +149,7 @@ def build(outdir):
 
     profile = lint_profile()
     sp, sf, sran = run_suite(os.path.join(ROOT, "test", "run-tests.sh"))
+    cp_, cf, cran = run_suite(os.path.join(ROOT, "test", "run-container-tests.sh"))
     ap, af, aran = run_suite(os.path.join(ROOT, "test", "run-ansible-tests.sh"))
 
     routine = defaults.get("ROUTINE_THRESHOLD", "?")
@@ -169,6 +170,8 @@ def build(outdir):
     badges = []
     if sran:
         badges.append(f'<span class="pill">{sp} behaviour tests passing</span>')
+    if cran:
+        badges.append(f'<span class="pill">{cp_} container tests passing</span>')
     if aran:
         badges.append(f'<span class="pill">{ap} role tests passing</span>')
     if profile:
@@ -298,8 +301,9 @@ truncates without ever deleting one.</p>
 variable names and the script's config keys still agree. Rename one side and
 nothing errors — the config is written, the script sources it, and the
 default quietly applies instead of your value.</p>
-<pre>bash test/run-tests.sh          # {sp if sran else '?'} passing
-bash test/run-ansible-tests.sh  # {ap if aran else '?'} passing
+<pre>bash test/run-tests.sh            # {sp if sran else '?'} passing
+bash test/run-container-tests.sh  # {cp_ if cran else '?'} passing
+bash test/run-ansible-tests.sh    # {ap if aran else '?'} passing
 ansible-lint ansible/           # profile: {e(profile) if profile else '?'}</pre>
 <p>ansible-lint is a gate rather than advice, and the profile is pinned in
 <code>.ansible-lint</code>. Without pinning it, the strictness would be

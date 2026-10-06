@@ -4,14 +4,14 @@
 
 > This page is **generated** from [BACKLOG.md](BACKLOG.md), the single source of truth for planned work. Regenerate it with `node ../backlogsync/bin/backlogsync.mjs roadmap` after editing the backlog — CI fails when the two disagree.
 
-**17 items · 8 shipped · 9 open · 3 milestones.**
+**18 items · 9 shipped · 9 open · 3 milestones.**
 
 ## At a glance
 
 | Milestone | Phase | Progress | Open | Shipped |
 |---|---|---|---|---|
 | **v0.1.0 — A tool that does not delete the wrong thing** | now | `##########` 100% | 0 | 8 |
-| **v0.2.0 — The gaps v0.1.0 shipped with** | next | `..........` 0% | 6 | 0 |
+| **v0.2.0 — The gaps v0.1.0 shipped with** | next | `#.........` 14% | 6 | 1 |
 | **v0.3.0 — Easy to get** | later | `..........` 0% | 3 | 0 |
 
 ## v0.1.0 — A tool that does not delete the wrong thing
@@ -28,7 +28,8 @@
 ## v0.2.0 — The gaps v0.1.0 shipped with
 
 - [ ] **DW-9** — The dry run cannot estimate every module · high · M · safety
-- [ ] **DW-10** — The containers module is untested · high · M · safety
+- [x] **DW-10** — The containers module is tested · high · M · safety · `main`
+- [ ] **DW-18** — Containers tested against a real daemon · med · M · safety
 - [ ] **DW-11** — `df` lies on copy-on-write filesystems · med · L · script
 - [ ] **DW-12** — Machine-readable output · med · S · script
 - [ ] **DW-13** — Watch more than one filesystem · med · M · script

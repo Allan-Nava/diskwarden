@@ -107,10 +107,17 @@ fills the disk it is watching.
 ## Testing
 
 ```bash
-bash test/run-tests.sh          # the script
-bash test/run-ansible-tests.sh  # the role
-ansible-lint ansible/           # profile: production, a gate not advice
+bash test/run-tests.sh            # the script
+bash test/run-container-tests.sh  # the containers module, against a fake CLI
+bash test/run-ansible-tests.sh    # the role
+ansible-lint ansible/             # profile: production, a gate not advice
 ```
+
+The container suite **strips every real `docker` and `podman` from `PATH` and
+refuses to run if one is still reachable**. That guard exists because writing
+it, one case had no shim, the host had a working daemon, and `--apply` ran
+`docker image prune -a -f` against it for real. A test suite that can issue
+destructive commands has to prove it is sandboxed before it issues any.
 
 The tests do not prove it deletes files. That is easy, and most people manage
 it by accident. They prove the opposite:
@@ -171,9 +178,11 @@ Three limitations of 0.1.0, written down rather than discovered:
   `apt-get clean` and `docker prune` report *"would run"* with no byte figure,
   because the only way to know is to run them. The file-based modules do give
   real numbers. (`DW-9`)
-- **The containers module has no tests.** The suite has no Docker daemon, so
-  the module whose mistakes would be the most expensive is exercised by
-  nobody. (`DW-10`)
+- **The containers module is tested against a fake CLI, not a real daemon.**
+  17 cases prove the decision logic — above all that `docker volume prune` is
+  never issued and that only `runner-*-cache-*` volumes are removed. What they
+  cannot prove is that the commands are still *valid*, which a future Docker
+  release could change. (`DW-10` done, `DW-18` open)
 - **`df` lies on copy-on-write filesystems.** On btrfs and ZFS, free space and
   reclaimable space are different questions and snapshots hold deleted data,
   so the thresholds would fire late or never. (`DW-11`)
