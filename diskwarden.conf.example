@@ -1,0 +1,29 @@
+# /etc/diskwarden.conf — sourced as shell. Keep it to assignments.
+#
+# A command-line flag always beats a value set here.
+
+# Which filesystem to watch, and when to act.
+MOUNTPOINT="/"
+ROUTINE_THRESHOLD=70      # below this, diskwarden does nothing at all
+EMERGENCY_THRESHOLD=80    # at or above, it also truncates active files
+
+LOG_FILE="/var/log/diskwarden.log"   # empty = stdout/stderr only
+
+# Retention. These are days.
+ARCHIVED_LOG_DAYS=5       # *.gz .1 .old — rotated copies, never an active log
+ROTATED_LOG_DAYS=7        # *.log.<suffix> anywhere under /var/log
+JOURNAL_KEEP_DAYS=5
+TMP_DAYS=10
+CRASHDUMP_DAYS=7
+CONTAINER_IMAGE_DAYS=5
+
+# Emergency only: a file bigger than this is truncated, never deleted.
+ACTIVE_LOG_TRUNCATE_MB=300
+CONTAINER_JSON_TRUNCATE_MB=100
+
+# Opt-in, and empty by default: application log directories outside /var/log.
+# Only rotated copies are removed here too — an active .log is never touched.
+# EXTRA_LOG_DIRS=(/opt/myapp/logs /srv/app/log)
+
+# Which reclaimers run. Each is a no-op when the thing it manages is absent.
+MODULES="logs journal packages tmp crashdumps containers"

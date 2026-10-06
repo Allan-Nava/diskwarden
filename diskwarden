@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+#
+# diskwarden — reclaim disk space when a filesystem crosses a threshold.
+#
+# Not a logrotate. logrotate rotates configured log files on a schedule.
+# This watches a filesystem's usage percentage and acts only when it has to,
+# across log files and everything else that quietly fills a server: package
+# caches, /tmp, crash dumps, orphaned container images, build caches. Above a
+# second threshold it truncates active files, which logrotate deliberately
+# will not do.
+#
+# Dry run unless you pass --apply. A tool that deletes things has no business
+# doing so on its first run.
+#
+# https://github.com/Allan-Nava/diskwarden   MIT
+
+set -uo pipefail
+
+VERSION="0.1.0"
+CONFIG="${DISKWARDEN_CONFIG:-/etc/diskwarden.conf}"
+
+# ---------------------------------------------------------------- defaults --
+MOUNTPOINT="/"
+ROUTINE_THRESHOLD=70          # below this: do nothing at all
+EMERGENCY_THRESHOLD=80        # at or above: also truncate active files
+LOG_FILE=""                   # empty = stderr only
+
+ARCHIVED_LOG_DAYS=5           # *.gz .1 .old — never an active log
+ROTATED_LOG_DAYS=7            # *.log.<something> in subdirectories
+JOURNAL_KEEP_DAYS=5
+TMP_DAYS=10
+CRASHDUMP_DAYS=7
+CONTAINER_IMAGE_DAYS=5
+
+ACTIVE_LOG_TRUNCATE_MB=300    # emergency only
+CONTAINER_JSON_TRUNCATE_MB=100
+
+EXTRA_LOG_DIRS=()             # opt-in: directories outside /var/log
+MODULES="logs journal packages tmp crashdumps containers"
+
+# Set by flags
+APPLY=0
+ROOT=""
+FORCE_USAGE=""
+QUIET=0
+
+freed_before=0
+
+usage_text() {
+    cat <<EOF
+diskwarden $VERSION — threshold-driven disk reclaim
+
+  diskwarden [options]
+
+  --apply            actually do it. Without this, nothing is modified.
+  --config FILE      config file (default: $CONFIG)
+  --mountpoint PATH  filesystem to watch (default: $MOUNTPOINT)
+  --root DIR         treat DIR as / — for testing against a fake tree
+  --usage PCT        pretend the filesystem is PCT% full, for testing
+  --modules "a b"    which reclaimers to run
+  --quiet            only warnings and errors
+  --version
+  --help
+
+Exit codes: 0 nothing to do or done · 1 error · 2 bad usage
+EOF
+}
+
+# ------------------------------------------------------------------ output --
+log() {
+    local level="$1"; shift
+    local ts; ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+    local line="$ts [$level] $*"
+    [[ -n "$LOG_FILE" ]] && printf '%s\n' "$line" >> "$LOG_FILE"
+    if [[ "$level" == "ERROR" || "$level" == "WARN" ]]; then
+        printf '%s\n' "$line" >&2
+    elif (( ! QUIET )); then
+        printf '%s\n' "$line"
+    fi
+}
+
+human() {
+    numfmt --to=iec --suffix=B "${1:-0}" 2>/dev/null || printf '%sB' "${1:-0}"
+}
+
+# Prefix a path with --root, so tests never touch the real filesystem.
+p() { printf '%s' "${ROOT}$1"; }
+
+# --------------------------------------------------------------- measuring --
+usage_pct() {
+    if [[ -n "$FORCE_USAGE" ]]; then printf '%s' "$FORCE_USAGE"; return; fi
+    df -P "$MOUNTPOINT" 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5}'
+}
+
+free_bytes() {
+    [[ -n "$FORCE_USAGE" ]] && { printf '0'; return; }
+    df -P -k "$MOUNTPOINT" 2>/dev/null | awk 'NR==2 {print $4 * 1024}'
+}
+
+# ------------------------------------------------------------------ acting --
+# Every destructive step goes through one of these two, so --apply is the only
+# thing standing between a report and a deletion. There is no third path.
+
+# delete_by_age <description> <dir> <find-expression...>
+delete_by_age() {
+    local desc="$1" dir="$2"; shift 2
+    [[ -d "$dir" ]] || return 0
+    local found=0 bytes=0 f size
+    while IFS= read -r f; do
+        [[ -n "$f" ]] || continue
+        size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
+        bytes=$(( bytes + size )); found=$(( found + 1 ))
+        if (( APPLY )); then rm -f -- "$f" 2>/dev/null || true; fi
+    done < <(find "$dir" -type f "$@" 2>/dev/null)
+    if (( found )); then
+        log INFO "$( (( APPLY )) && echo removed || echo "would remove") $found file(s), $(human "$bytes") — $desc"
+    fi
+    return 0
+}
+
+# truncate_if_large <file> <min_mb>
+# Truncate, never delete: a process holding the file open keeps writing to a
+# deleted inode, so the space is not returned until it restarts. `df` stays
+# full while `du` looks fine, and only `lsof +L1` explains why.
+truncate_if_large() {
+    local file="$1" min_mb="$2" size min
+    [[ -f "$file" && -w "$file" ]] || return 0
+    size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo 0)
+    min=$(( min_mb * 1024 * 1024 ))
+    (( size > min )) || return 0
+    log INFO "$( (( APPLY )) && echo truncated || echo "would truncate") $file ($(human "$size"))"
+    (( APPLY )) && : > "$file"
+    return 0
+}
+
+run_cmd() {
+    local desc="$1"; shift
+    if (( APPLY )); then
+        log INFO "running: $desc"
+        "$@" >/dev/null 2>&1 || log WARN "failed: $desc"
+    else
+        log INFO "would run: $desc"
+    fi
+    return 0
+}
+
+# -------------------------------------------------------------- reclaimers --
+# Each one is a no-op when the thing it manages is not installed, so the same
+# config works on every host in a fleet.
+
+reclaim_logs() {
+    local d; d="$(p /var/log)"
+    delete_by_age "archived logs older than ${ARCHIVED_LOG_DAYS}d" "$d" \
+        \( -name '*.gz' -o -name '*.[0-9]' -o -name '*.[0-9].gz' \
+           -o -name '*.old' -o -name '*.bak' \) -mtime "+${ARCHIVED_LOG_DAYS}"
+
+    # Anything with a suffix AFTER .log/.out is a rotated copy. An active log
+    # ends in .log, so this pattern can never match one.
+    delete_by_age "rotated logs older than ${ROTATED_LOG_DAYS}d" "$d" \
+        \( -name '*.log.*' -o -name '*.out.*' \) -mtime "+${ROTATED_LOG_DAYS}"
+
+    local extra
+    for extra in "${EXTRA_LOG_DIRS[@]:-}"; do
+        [[ -n "$extra" ]] || continue
+        delete_by_age "rotated logs in $extra older than ${ROTATED_LOG_DAYS}d" \
+            "$(p "$extra")" \( -name '*.log.*' -o -name '*.out.*' \) \
+            -mtime "+${ROTATED_LOG_DAYS}"
+    done
+}
+
+reclaim_journal() {
+    command -v journalctl >/dev/null 2>&1 || return 0
+    run_cmd "journalctl --vacuum-time=${JOURNAL_KEEP_DAYS}d" \
+        journalctl --vacuum-time="${JOURNAL_KEEP_DAYS}d"
+}
+
+reclaim_packages() {
+    if command -v apt-get >/dev/null 2>&1; then
+        run_cmd "apt-get clean" apt-get clean -qq
+        run_cmd "apt-get autoclean" apt-get autoclean -qq
+    elif command -v dnf >/dev/null 2>&1; then
+        run_cmd "dnf clean packages" dnf clean packages
+    elif command -v yum >/dev/null 2>&1; then
+        run_cmd "yum clean packages" yum clean packages
+    fi
+}
+
+reclaim_tmp() {
+    delete_by_age "files in /tmp older than ${TMP_DAYS}d" "$(p /tmp)" \
+        -mtime "+${TMP_DAYS}"
+    (( APPLY )) && find "$(p /tmp)" -mindepth 1 -type d -empty -delete 2>/dev/null
+    return 0
+}
+
+reclaim_crashdumps() {
+    local dir
+    for dir in /var/crash /var/lib/systemd/coredump; do
+        delete_by_age "crash dumps in $dir older than ${CRASHDUMP_DAYS}d" \
+            "$(p "$dir")" -mtime "+${CRASHDUMP_DAYS}"
+    done
+}
+
+reclaim_containers() {
+    local cli=""
+    command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && cli=docker
+    [[ -z "$cli" ]] && command -v podman >/dev/null 2>&1 && cli=podman
+    [[ -n "$cli" ]] || return 0
+
+    run_cmd "$cli image prune (older than ${CONTAINER_IMAGE_DAYS}d)" \
+        "$cli" image prune -a -f --filter "until=$(( CONTAINER_IMAGE_DAYS * 24 ))h"
+    run_cmd "$cli container prune" "$cli" container prune -f
+    run_cmd "$cli builder prune" "$cli" builder prune -f
+
+    # Deliberately NOT `volume prune`: that is wide enough to take a data
+    # volume with it. CI runner cache volumes are removed by name instead,
+    # and one attached to a running job simply fails to remove.
+    if command -v gitlab-runner >/dev/null 2>&1; then
+        if [[ -x /usr/share/gitlab-runner/clear-docker-cache ]]; then
+            run_cmd "gitlab-runner clear-docker-cache" \
+                /usr/share/gitlab-runner/clear-docker-cache
+        else
+            local v
+            while IFS= read -r v; do
+                [[ "$v" == runner-*-cache-* ]] || continue
+                run_cmd "remove runner cache volume $v" "$cli" volume rm "$v"
+            done < <("$cli" volume ls -q --filter 'name=runner-' 2>/dev/null)
+        fi
+    fi
+}
+
+emergency_truncate() {
+    log WARN "EMERGENCY: truncating active files"
+    local f
+    while IFS= read -r f; do
+        truncate_if_large "$f" "$ACTIVE_LOG_TRUNCATE_MB"
+    done < <(find "$(p /var/log)" -type f -name '*.log' 2>/dev/null)
+
+    while IFS= read -r f; do
+        truncate_if_large "$f" "$CONTAINER_JSON_TRUNCATE_MB"
+    done < <(find "$(p /var/lib/docker/containers)" "$(p /var/lib/containers)" \
+             -type f -name '*-json.log' 2>/dev/null)
+}
+
+# -------------------------------------------------------------------- main --
+main() {
+    # Load the config before parsing flags, so an explicit flag always wins.
+    # The other order looks harmless and means `--mountpoint /data` is
+    # silently ignored on any host that has a config file.
+    local i
+    for (( i = 1; i <= $#; i++ )); do
+        if [[ "${!i}" == "--config" ]]; then
+            local j=$(( i + 1 )); CONFIG="${!j}"
+        fi
+    done
+    # shellcheck source=/dev/null
+    [[ -r "$CONFIG" ]] && source "$CONFIG"
+
+    while (( $# )); do
+        case "$1" in
+            --apply)      APPLY=1 ;;
+            --config)     shift ;;   # already handled above
+            --mountpoint) MOUNTPOINT="$2"; shift ;;
+            --root)       ROOT="${2%/}"; shift ;;
+            --usage)      FORCE_USAGE="$2"; shift ;;
+            --modules)    MODULES="$2"; shift ;;
+            --quiet)      QUIET=1 ;;
+            --version)    printf 'diskwarden %s\n' "$VERSION"; exit 0 ;;
+            -h|--help)    usage_text; exit 0 ;;
+            *)            printf 'unknown option: %s\n\n' "$1" >&2
+                          usage_text >&2; exit 2 ;;
+        esac
+        shift
+    done
+
+    local usage free_after reclaimed mode
+    usage="$(usage_pct)"
+    if [[ -z "$usage" ]]; then
+        log ERROR "cannot read usage for $MOUNTPOINT"
+        exit 1
+    fi
+
+    if (( usage < ROUTINE_THRESHOLD )); then
+        (( QUIET )) || log INFO "${usage}% of $MOUNTPOINT used, below ${ROUTINE_THRESHOLD}% — nothing to do"
+        exit 0
+    fi
+
+    mode=ROUTINE
+    (( usage >= EMERGENCY_THRESHOLD )) && mode=EMERGENCY
+    freed_before="$(free_bytes)"
+
+    log INFO "=== $mode — ${usage}% used, free $(human "$freed_before"), $( (( APPLY )) && echo APPLY || echo 'DRY RUN') ==="
+
+    local m
+    for m in $MODULES; do
+        if declare -F "reclaim_$m" >/dev/null; then
+            reclaim_"$m"
+        else
+            log WARN "no such module: $m"
+        fi
+    done
+
+    [[ "$mode" == "EMERGENCY" ]] && emergency_truncate
+
+    free_after="$(free_bytes)"
+    reclaimed=$(( free_after - freed_before ))
+    if (( APPLY )); then
+        log INFO "=== done — freed $(human "$reclaimed"), now $(usage_pct)% used ==="
+    else
+        log INFO "=== dry run complete — nothing was modified. Re-run with --apply ==="
+    fi
+    exit 0
+}
+
+main "$@"

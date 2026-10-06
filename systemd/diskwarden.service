@@ -1,0 +1,11 @@
+[Unit]
+Description=Reclaim disk space when the filesystem crosses a threshold
+Documentation=https://github.com/Allan-Nava/diskwarden
+
+[Service]
+Type=oneshot
+# --apply is here and nowhere else: the only way diskwarden deletes anything
+# is a unit you installed deliberately. Run it by hand first, without it.
+ExecStart=/usr/local/sbin/diskwarden --apply --quiet
+Nice=10
+IOSchedulingClass=idle

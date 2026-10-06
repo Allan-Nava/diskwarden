@@ -1,0 +1,12 @@
+[Unit]
+Description=Check disk usage hourly
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+# Without this, every host in a fleet starts deleting at the same second.
+RandomizedDelaySec=5min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
