@@ -202,8 +202,11 @@ reclaim_crashdumps() {
 
 reclaim_containers() {
     local cli=""
+    # Both are probed with `info`, not just looked up: an installed CLI whose
+    # service is down would otherwise be selected and every call would fail.
     command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && cli=docker
-    [[ -z "$cli" ]] && command -v podman >/dev/null 2>&1 && cli=podman
+    [[ -z "$cli" ]] && command -v podman >/dev/null 2>&1 \
+        && podman info >/dev/null 2>&1 && cli=podman
     [[ -n "$cli" ]] || return 0
 
     run_cmd "$cli image prune (older than ${CONTAINER_IMAGE_DAYS}d)" \
